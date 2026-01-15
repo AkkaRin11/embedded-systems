@@ -1,0 +1,21 @@
+# Build output
+Debug/
+Release/
+build/
+
+# Compiled files
+*.o
+*.d
+*.elf
+*.hex
+*.bin
+*.map
+*.su
+
+# IDE files
+.metadata/
+.settings/
+*.launch
+*.log
+*.cfg
+.mxproject
