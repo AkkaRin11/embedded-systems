@@ -1,11 +1,16 @@
 import cv2
 import os
 import torch
-from ultralytics import YOLO
-import pyrealsense2 as rs
 import numpy as np
 from datetime import datetime
 import time
+from ultralytics import YOLO
+
+try:
+    import pyrealsense2 as rs
+except ImportError:
+    rs = None
+    print("Внимание: библиотека pyrealsense2 не установлена. Работа с камерой RealSense будет недоступна.")
 
 
 def suppress_warnings():
@@ -13,6 +18,10 @@ def suppress_warnings():
 
 
 def init_realsense_pipeline():
+    if rs is None:
+        print("Ошибка: pyrealsense2 не найден.")
+        return None
+
     pipeline = rs.pipeline()
     config = rs.config()
 
@@ -21,10 +30,10 @@ def init_realsense_pipeline():
 
     try:
         pipeline.start(config)
-        print("RealSense D435I подключена")
+        print("RealSense D435I подключена успешно")
         return pipeline
     except Exception as e:
-        print(f"RealSense ошибка: {e}")
+        print(f"Ошибка при запуске RealSense: {e}")
         return None
 
 
@@ -32,15 +41,16 @@ def create_dataset_folder():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dataset_path = f"dataset_{timestamp}"
 
-    os.makedirs(f"{dataset_path}/color", exist_ok=True)
-    os.makedirs(f"{dataset_path}/depth", exist_ok=True)
+    os.makedirs(os.path.join(dataset_path, "color"), exist_ok=True)
+    os.makedirs(os.path.join(dataset_path, "depth"), exist_ok=True)
 
-    print(f"Папка датасета: {dataset_path}")
+    print(f"Папка датасета создана: {dataset_path}")
     return dataset_path
 
 
 def capture_realsense_frame(pipeline):
     try:
+        # Ожидание кадров с таймаутом
         frames = pipeline.wait_for_frames(timeout_ms=5000)
 
         align = rs.align(rs.stream.color)
@@ -59,14 +69,16 @@ def capture_realsense_frame(pipeline):
 
 
 def save_frame(color_image, depth_image, dataset_path, frame_id):
-    cv2.imwrite(f"{dataset_path}/color/{frame_id:06d}.jpg", color_image)
-    cv2.imwrite(f"{dataset_path}/depth/{frame_id:06d}.png", depth_image)
+    color_path = os.path.join(dataset_path, "color", f"{frame_id:06d}.jpg")
+    depth_path = os.path.join(dataset_path, "depth", f"{frame_id:06d}.png")
+    cv2.imwrite(color_path, color_image)
+    cv2.imwrite(depth_path, depth_image)
 
 
 def collect_dataset(pipeline, dataset_path, capture_interval=0.5):
     print("\n=== СБОР ДАТАСЕТА ===")
     print(f"Автосохранение каждые {capture_interval} секунд")
-    print("Q - выход\n")
+    print("Нажмите 'Q' для выхода\n")
 
     frame_id = 0
     last_capture_time = time.time()
@@ -76,7 +88,6 @@ def collect_dataset(pipeline, dataset_path, capture_interval=0.5):
             color_image, depth_image = capture_realsense_frame(pipeline)
 
             if color_image is None:
-                print("Пропущен кадр")
                 continue
 
             current_time = time.time()
@@ -91,8 +102,8 @@ def collect_dataset(pipeline, dataset_path, capture_interval=0.5):
             cv2.putText(display_image, f"Кадров: {frame_id}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-            time_until_next = capture_interval - (current_time - last_capture_time)
-            cv2.putText(display_image, f"След кадр: {time_until_next:.1f}s", (10, 60),
+            time_until_next = max(0, capture_interval - (current_time - last_capture_time))
+            cv2.putText(display_image, f"След кадр через: {time_until_next:.1f}s", (10, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             cv2.imshow('Датасет RealSense D435I', display_image)
@@ -103,17 +114,18 @@ def collect_dataset(pipeline, dataset_path, capture_interval=0.5):
     finally:
         pipeline.stop()
         cv2.destroyAllWindows()
-        print(f"\nВсего сохранено: {frame_id} кадров")
-        print(f"Датасет: {dataset_path}")
+        print(f"\nСбор завершен. Всего сохранено: {frame_id} кадров")
+        print(f"Путь: {dataset_path}")
 
 
 def collect_dataset_with_yolo(pipeline, dataset_path, model, capture_interval=0.5):
     print("\n=== СБОР ДАТАСЕТА С YOLO ===")
     print(f"Автосохранение каждые {capture_interval} секунд")
-    print("Q - выход\n")
+    print("Нажмите 'Q' для выхода\n")
 
     frame_id = 0
     last_capture_time = time.time()
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
     try:
         while True:
@@ -130,14 +142,15 @@ def collect_dataset_with_yolo(pipeline, dataset_path, model, capture_interval=0.
                 frame_id += 1
                 last_capture_time = current_time
 
-            results = model(color_image, verbose=False, device='cuda:0' if torch.cuda.is_available() else 'cpu')
+            # Предикт модели
+            results = model(color_image, verbose=False, device=device)
             annotated_image = results[0].plot()
 
             cv2.putText(annotated_image, f"Кадров: {frame_id}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-            time_until_next = capture_interval - (current_time - last_capture_time)
-            cv2.putText(annotated_image, f"След кадр: {time_until_next:.1f}s", (10, 60),
+            time_until_next = max(0, capture_interval - (current_time - last_capture_time))
+            cv2.putText(annotated_image, f"След кадр через: {time_until_next:.1f}s", (10, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
             cv2.imshow('YOLO + Датасет', annotated_image)
@@ -148,7 +161,7 @@ def collect_dataset_with_yolo(pipeline, dataset_path, model, capture_interval=0.
     finally:
         pipeline.stop()
         cv2.destroyAllWindows()
-        print(f"\nВсего сохранено: {frame_id} кадров")
+        print(f"\nСбор завершен. Всего сохранено: {frame_id} кадров")
 
 
 def main():
@@ -160,23 +173,24 @@ def main():
 
     dataset_path = create_dataset_folder()
 
-    print("\nРежим сбора датасета:")
-    print("1 - Только сохранение (без YOLO)")
-    print("2 - С детекцией YOLO")
+    print("\nВыберите режим сбора датасета:")
+    print("1 - Только сохранение (без визуализации YOLO)")
+    print("2 - С детекцией YOLO в реальном времени")
 
-    choice = input("Выбор: ")
+    choice = input("Ваш выбор: ").strip()
 
     capture_interval = 0.5
 
     if choice == "1":
         collect_dataset(pipeline, dataset_path, capture_interval)
     elif choice == "2":
-        model = YOLO("yolov8n.pt")
+        model_name = "yolov8n.pt"
+        model = YOLO(model_name)
         if torch.cuda.is_available():
             model.to('cuda:0')
         collect_dataset_with_yolo(pipeline, dataset_path, model, capture_interval)
     else:
-        print("Неверный выбор")
+        print("Неверный выбор. Завершение работы.")
         pipeline.stop()
 
 

@@ -21,11 +21,12 @@ def list_cameras(max_index=10):
     available = []
     for i in range(max_index):
         cap = cv2.VideoCapture(i)
-        ret, _ = cap.read()
-        if ret:
-            available.append(i)
-            print(f"Камера {i} работает")
-        cap.release()
+        if cap.isOpened():
+            ret, _ = cap.read()
+            if ret:
+                available.append(i)
+                print(f"Камера {i} работает")
+            cap.release()
     return available
 
 
@@ -44,6 +45,7 @@ def load_yolo_model(model_path="best.pt"):
     model = YOLO(model_path)
     if torch.cuda.is_available():
         model.to('cuda:0')
+        # В PyTorch 2.4.1 для Python 3.8 доступ к параметрам остается прежним
         print(f"YOLO устройство: {next(model.model.parameters()).device}")
         print(f"Модель загружена: {model_path}")
     else:
@@ -52,20 +54,26 @@ def load_yolo_model(model_path="best.pt"):
 
 
 def detect_cups_only(model, frame, conf_threshold=0.5):
-    results = model(frame, conf=conf_threshold, verbose=False, device='cuda:0' if torch.cuda.is_available() else 'cpu')
+    # Принудительное использование CPU или CUDA в зависимости от доступности
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    results = model(frame, conf=conf_threshold, verbose=False, device=device)
     return results
 
 
 def draw_yolo_detections(frame, results):
+    # Метод plot() доступен в Ultralytics 8.x
     annotated_frame = results[0].plot()
     return annotated_frame
+
+
 def analyze_cup_position(frame, results):
     """
     Анализирует положение первой обнаруженной кружки и выводит в консоль направление поворота.
     """
     if len(results[0].boxes) > 0:
         box = results[0].boxes[0]
-        x1, _, x2, _ = box.xyxy[0]
+        # Координаты [x1, y1, x2, y2]
+        x1, _, x2, _ = box.xyxy[0].tolist()
 
         cup_center_x = (x1 + x2) / 2
         screen_center_x = frame.shape[1] / 2
@@ -78,7 +86,6 @@ def analyze_cup_position(frame, results):
             print("Нужно повернуться вправо")
         else:
             print("Кружка находится по центру")
-
 
 
 def display_camera_stream_yolo(cap, model):
@@ -106,14 +113,15 @@ def display_camera_stream_yolo(cap, model):
 
 def main():
     suppress_warnings()
-    print(list_cameras())
+    print("Доступные камеры:", list_cameras())
 
-    camera_index = 2
+    # Рекомендуется использовать проверенный индекс камеры
+    camera_index = 0  # Обычно 0 - основная камера
     cap = capture_camera_stream(camera_index)
     if cap is None:
         return
 
-    model = load_yolo_model()
+    model = load_yolo_model("best.pt")
     display_camera_stream_yolo(cap, model)
 
 
