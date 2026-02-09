@@ -2,7 +2,19 @@ import cv2
 import os
 import torch
 from ultralytics import YOLO
+import serial
+import time
 
+ser = serial.Serial(
+    port='COM3',
+    baudrate=115200,
+    timeout=0.1
+)
+
+time.sleep(2) 
+
+def send_command(cmd):
+    ser.write((cmd + '\n').encode())
 
 def suppress_warnings():
     os.environ['OPENCV_LOG_LEVEL'] = 'FATAL'
@@ -39,6 +51,31 @@ def capture_camera_stream(camera_index=0):
     cap.set(cv2.CAP_PROP_FPS, 30)
     return cap
 
+def analyze_cup_position(frame, results):
+    if len(results[0].boxes) > 0:
+        box = results[0].boxes[0]
+        x1, _, x2, _ = box.xyxy[0]
+
+        cup_center_x = (x1 + x2) / 2
+        screen_center_x = frame.shape[1] / 2
+
+        tolerance = 30
+
+        if cup_center_x < screen_center_x - tolerance:
+            print("Нужно повернуться влево")
+            send_command('L')
+
+        elif cup_center_x > screen_center_x + tolerance:
+            print("Нужно повернуться вправо")
+            send_command('R')
+
+        else:
+            print("Кружка по центру")
+            send_command('S')
+    else:
+        send_command('S')
+
+
 
 def load_yolo_model(model_path="best.pt"):
     model = YOLO(model_path)
@@ -59,27 +96,6 @@ def detect_cups_only(model, frame, conf_threshold=0.5):
 def draw_yolo_detections(frame, results):
     annotated_frame = results[0].plot()
     return annotated_frame
-def analyze_cup_position(frame, results):
-    """
-    Анализирует положение первой обнаруженной кружки и выводит в консоль направление поворота.
-    """
-    if len(results[0].boxes) > 0:
-        box = results[0].boxes[0]
-        x1, _, x2, _ = box.xyxy[0]
-
-        cup_center_x = (x1 + x2) / 2
-        screen_center_x = frame.shape[1] / 2
-
-        tolerance = 30
-
-        if cup_center_x < screen_center_x - tolerance:
-            print("Нужно повернуться влево")
-        elif cup_center_x > screen_center_x + tolerance:
-            print("Нужно повернуться вправо")
-        else:
-            print("Кружка находится по центру")
-
-
 
 def display_camera_stream_yolo(cap, model):
     check_gpu_usage()
