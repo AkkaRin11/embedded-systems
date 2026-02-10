@@ -59,28 +59,10 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
 uint8_t rxByte = 0;
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance == USART1)
-    {
-        switch (rxByte)
-        {
-            case 3:
-                HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
-                HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
-                __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 300);
-                break;
-            case 0:
-                __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
-                break;
-        }
-
-        HAL_UART_Receive_IT(&huart1, &rxByte, 1);
-    }
-}
-
 /* USER CODE END 0 */
+
 
 /**
   * @brief  The application entry point.
@@ -115,13 +97,32 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_Delay(1000);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
-  HAL_UART_Receive_IT(&huart1, &rxByte, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    if (HAL_UART_Receive(&huart1, &rxByte, 1, 1000) == HAL_OK)
+    {
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 0);
+      HAL_UART_Transmit(&huart1, &rxByte, 1, 100);
+
+      switch (rxByte)
+      {
+        case 3:
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
+          __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 300);
+          break;
+        case 0:
+          __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
+          break;
+      }
+
+      HAL_Delay(100);
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 1);
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
