@@ -59,30 +59,23 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t rxByte = 0;
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART1)
     {
         switch (rxByte)
         {
-            case 'L': // влево
+            case 3:
                 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
                 HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
                 __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 300);
                 break;
-
-            case 'R': // вправо
-                HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 0);
-                HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 1);
-                __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 300);
-                break;
-
-            case 'S': // стоп
+            case 0:
                 __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
                 break;
         }
 
-        // Снова включаем приём
         HAL_UART_Receive_IT(&huart1, &rxByte, 1);
     }
 }
@@ -106,8 +99,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  HAL_UART_Receive_IT(&huart1, &rxByte, 1);
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -122,7 +113,9 @@ int main(void)
   MX_TIM2_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_Delay(1000);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  HAL_UART_Receive_IT(&huart1, &rxByte, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
