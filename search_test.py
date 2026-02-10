@@ -38,8 +38,8 @@ model.to("cuda" if torch.cuda.is_available() else "cpu")
 # -------------------- MOTOR COMMANDS --------------------
 
 MOTOR_STOP = 0x00
-MOTOR_TURN_LEFT = 0x01
-MOTOR_TURN_RIGHT = 0x02
+MOTOR_TURN_LEFT = 0x00
+MOTOR_TURN_RIGHT = 0x00
 MOTOR_GO_FRONT = 0x03
 
 # -------------------- UART INIT --------------------
@@ -103,20 +103,7 @@ while True:
 
     if uart_connected:
         resp = uart_send_and_receive(uart, motor_command)
-
-        if resp is not None:
-            if resp == motor_command:
-                status = "ACK"
-                color = (0, 255, 0)
-            else:
-                status = f"WRONG:{resp}"
-                color = (0, 0, 255)
-        else:
-            status = "NO RESP"
-            color = (0, 0, 255)
-
-        cv2.putText(annotated, status, (200, 50),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+        print(f"sended {motor_command}, received{resp}")
 
     # -------------------- DISPLAY --------------------
 
