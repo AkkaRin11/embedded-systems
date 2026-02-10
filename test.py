@@ -1,32 +1,56 @@
-import pyrealsense2 as rs
-import numpy as np
-import cv2
-import torch
-from ultralytics import YOLO
+import serial
+import time
 
-pipeline = rs.pipeline()
-config = rs.config()
-config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-pipeline.start(config)
+PORT = "/dev/ttyTHS1"
+BAUD = 115200
+TEST_BYTE = 0x03
 
-model = YOLO("best.pt")
-model.to("cuda" if torch.cuda.is_available() else "cpu")
+def main():
+    try:
+        uart = serial.Serial(
+            port=PORT,
+            baudrate=BAUD,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=0  # non-blocking
+        )
+        time.sleep(2)
+        uart.reset_input_buffer()
+        uart.reset_output_buffer()
+        print(f"Opened {PORT} @ {BAUD}")
+    except Exception as e:
+        print(f"Failed to open UART: {e}")
+        return
 
-while True:
-    frames = pipeline.wait_for_frames()
-    color_frame = frames.get_color_frame()
-    if not color_frame:
-        continue
+    try:
+        while True:
+            print("Sending 0x03...")
+            uart.write(bytes([TEST_BYTE]))
 
-    frame = np.asanyarray(color_frame.get_data())
+            # Wait up to 1 second for echo
+            start = time.time()
+            received = None
 
-    results = model(frame, conf=0.5, verbose=False)
-    annotated = results[0].plot()
+            while time.time() - start < 1.0:
+                if uart.in_waiting >= 1:
+                    received = uart.read(1)[0]
+                    break
 
-    cv2.imshow("YOLO + RS", annotated)
+            if received is None:
+                print("No response")
+            elif received == TEST_BYTE:
+                print("ACK received: 0x03 ✅")
+            else:
+                print(f"Wrong byte received: 0x{received:02X} ❌")
 
-    if cv2.waitKey(1) == ord('q'):
-        break
+            time.sleep(1)
 
-pipeline.stop()
-cv2.destroyAllWindows()
+    except KeyboardInterrupt:
+        print("\nExiting test")
+
+    finally:
+        uart.close()
+
+if __name__ == "__main__":
+    main()
