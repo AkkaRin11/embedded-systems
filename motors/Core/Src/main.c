@@ -99,6 +99,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_Delay(1000);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -107,23 +108,41 @@ int main(void)
   {
     if (HAL_UART_Receive(&huart1, &rxByte, 1, 1000) == HAL_OK)
     {
-      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 0);
       HAL_UART_Transmit(&huart1, &rxByte, 1, 100);
 
       switch (rxByte)
       {
-        case 3:
+        case 3:  // Поворот вправо
+          // 1-й мотор вперёд
           HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 0);
           HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 1);
           __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 300);
+
+          // 2-й мотор назад
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, 0);
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, 1);
+          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 300);
           break;
-        case 0:
+
+        case 2:  // Поворот влево
+          // 1-й мотор назад
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, 0);
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, 1);
+          __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 300);
+
+          // 2-й мотор вперёд
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, 0);
+          HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, 1);
+          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 300);
+          break;
+
+        case 0:  // Стоп оба мотора
           __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0);
+          __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0);
           break;
       }
 
       HAL_Delay(100);
-      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 1);
     }
     /* USER CODE END WHILE */
 
